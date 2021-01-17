@@ -10,9 +10,15 @@
                <span 
                     v-for="subItem of item.level" 
                     :key="subItem" class="station-style" 
-                    :class="[subItem === item.level ? 'bottom-line' : 'line']"
+
+                    :class="[
+                        subItem === item.level ? 'bottom-line' : 'line', 
+                        {'last-level-line': !item.children || !item.children.length}
+                    ]"
                 ></span>
-               <span>{{ item.level }} {{ item.name }} </span>
+                 <!-- :class="[subItem === item.level ? 'bottom-line' : 'line']"
+                    :class="{'last-level-line': item.level === 3}" -->
+               <span>{{ item.name }} </span>
             </li>
         </ul>
     </div>
@@ -153,6 +159,10 @@ li{
     border-bottom: 1px solid #ccc;
     content: ' ';
 }
+.last-level-line:before{
+    bottom: 6px;
+}
+
 .line{
      position: relative;
     z-index: 1;
