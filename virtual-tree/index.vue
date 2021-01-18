@@ -2,24 +2,30 @@
     <!--  -->
     <div class="virtual-tree-wrapper" @scroll="handleScroll">
         <div class="list-bar" :style="totalHeight" ref="listBar"></div>
-        <ul class="list-ctx">
-            <li 
-                v-for="item of showData" 
-                :key="item.id"
-            > 
-               <span 
-                    v-for="subItem of item.level" 
-                    :key="subItem" class="station-style" 
-
-                    :class="[
-                        subItem === item.level ? 'bottom-line' : 'line', 
-                        {'last-level-line': !item.children || !item.children.length}
-                    ]"
-                ></span>
-                 <!-- :class="[subItem === item.level ? 'bottom-line' : 'line']"
-                    :class="{'last-level-line': item.level === 3}" -->
-               <span>{{ item.name }} </span>
-            </li>
+        <ul class="list-ctx" ref="listCtx">
+           <li 
+                    v-for="(item, index) of showData" 
+                    :key="item.id"
+                    v-show="item.visible"
+                > 
+                    <span>
+                        <span 
+                            v-for="subItem of item.level" 
+                            :key="subItem" class="station-style" 
+                            :class="[
+                                subItem === item.level ? 'bottom-line' : 'line', 
+                                {'last-level-line': !item.children || !item.children.length},
+                                {'none-pseudo': subItem === 0 && index === showData.length - 1}
+                            ]"
+                        />
+                    </span>
+                    <i 
+                        v-if="item.children && item.children.length" 
+                        :class="['icon', item.isExpand ? 'icon-close' : 'icon-expand']"
+                        @click="handleExpandClick(item, index)" 
+                    />
+                    <span>{{ item.name }} </span>
+                </li>
         </ul>
     </div>
 </template>
@@ -31,12 +37,12 @@ export default {
     props: {
         treeData: {
             type: Array,
-            default: () => treeData
+            default: () => Object.freeze(treeData)
         },
 
         itemHeight: {
             type: [String, Number],
-            default: 20
+            default: 24
         },
 
         defaultProps: {
@@ -54,6 +60,10 @@ export default {
         return {
             dataMap: new Map(),
             showData: [],
+            allData: [],
+            visibleTrueData: [], // visible 为true的数据
+            showCount: 0,
+            virtualWrapHeight: 0,
             startPosition: 0,
             endPosition: 0
         }
@@ -62,15 +72,13 @@ export default {
     computed: {
         totalHeight(){
             return {
-                height: this.itemHeight * this.dataMap.size + 'px'
+                height: this.itemHeight * this.visibleTrueData.length + 'px'
             }
         }
     },
 
     watch: {
-        treeData() {
-
-        }
+       
     },
 
     mounted() {
@@ -80,10 +88,11 @@ export default {
 
     methods: {
         init() {
-            // const virtualWrapHeight = this.$el.clientHeight;
-            // const showCount = Math.ceil(virtualWrapHeight / this.itemHeight);
-            this.showData = Array.from(this.dataMap.values());
-            console.log(this.dataMap);
+            this.virtualWrapHeight = this.$el.clientHeight;
+            this.showCount = Math.ceil(this.virtualWrapHeight / this.itemHeight) + 5;
+            this.endPosition = this.showCount;
+            this.allData = Object.freeze(Array.from(this.dataMap.values()));
+            this.updateVisibleTrueData();
         },
 
         /**
@@ -91,9 +100,11 @@ export default {
          */
         flatData(list, level = 0, parentId = 0) {
             // TODO 可换种方式实现，此种方式可能导致内存溢出
-            for(let item of  list) {
+            for(let item of list) {
                 item.level = level;
                 item.pId = parentId;
+                this.$set(item, 'visible', true);
+                this.$set(item, 'isExpand', true);
                 this.dataMap.set(item.id, item);
 
                 item?.children?.length && this.flatData(item.children, level + 1, item.id);  
@@ -101,8 +112,45 @@ export default {
         },
 
         handleScroll() {
+            const scrollTop = this.$el.scrollTop;
+            this.$refs.listCtx.style.webkitTransform = `translate3d(0, ${scrollTop}px, 0)`;
+            this.startPosition = Math.floor(scrollTop / this.itemHeight);
+            this.endPosition = this.startPosition + this.showCount;
+            this.showData = this.visibleTrueData.slice(this.startPosition, this.endPosition);
+        },
 
-        }
+        handleExpandClick(item) {
+            if(!item?.children?.length) return;
+
+            item.isExpand = !item.isExpand;
+            if(item.isExpand) {  // 展开
+                this.showChildren(item.children, item.isExpand);
+            }
+            else{  // 收起来
+                this.visibleChildren(item.children);
+            }
+
+            this.updateVisibleTrueData();
+        },
+
+        visibleChildren(list) {
+            for(let item of list) {
+                item.visible = false;
+                item?.children?.length && this.visibleChildren(item.children);
+            }
+        },
+
+        showChildren(list, isExpand) {
+            for(let item of list) {
+                item.visible = isExpand;
+                item?.children?.length && this.showChildren(item.children, item.isExpand);
+            }
+        },
+
+        updateVisibleTrueData() {
+            this.visibleTrueData = this.allData.filter(item => item.visible);
+            this.showData = this.visibleTrueData.slice(this.startPosition, this.endPosition);
+        },
     }
 }
 </script>
@@ -132,6 +180,7 @@ ul{
 li{
     height: 24px;
     text-align: left;
+    cursor: pointer;
 }
 .station-style{
     display: inline-block;
@@ -145,7 +194,7 @@ li{
 }
 .bottom-line:before{
     position: absolute;
-    top: 0;
+    top: -3px;
     bottom: -6px;
     margin-left: 3px;
     border-left: 1px solid #ccc;
@@ -175,5 +224,27 @@ li{
     margin-left: 3px;
     border-left: 1px solid #ccc;
     content: ' ';
+}
+.icon{
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    margin-right: 2px;
+}
+.icon-expand{
+    background-image: url('./icons/expand.png');
+}
+.icon-close{
+    background-image: url('./icons/close.png');
+}
+.none-pseudo:after{
+    content: none;
+}
+
+.fade-enter-active{
+    transform: translate3d(0, 20px, 0);
+}
+.fade-leave-active{
+    transform: translate3d(0, 0, 0);
 }
 </style>
