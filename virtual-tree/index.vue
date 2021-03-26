@@ -3,11 +3,13 @@
     <div class="virtual-tree-wrapper" @scroll="handleScroll">
         <div class="list-bar" :style="totalHeight" ref="listBar"></div>
         <ul class="list-ctx" ref="listCtx">
-           <li 
+            <!-- <transition-group name="list"> -->
+                <li 
                     v-for="(item, index) of showData" 
                     :key="item.id"
-                    v-show="item.visible"
                 > 
+                    <!-- class="list-item" -->
+                    <!-- v-show="item.visible" -->
                     <span>
                         <span 
                             v-for="subItem of item.level" 
@@ -20,12 +22,13 @@
                         />
                     </span>
                     <i 
-                        v-if="item.children && item.children.length" 
+                        v-show="item.children && item.children.length" 
                         :class="['icon', item.isExpand ? 'icon-close' : 'icon-expand']"
                         @click="handleExpandClick(item, index)" 
                     />
                     <span>{{ item.name }} </span>
                 </li>
+            <!-- </transition-group> -->
         </ul>
     </div>
 </template>
@@ -41,7 +44,7 @@ export default {
         },
 
         itemHeight: {
-            type: [String, Number],
+            type: [ String, Number ],
             default: 24
         },
 
@@ -53,6 +56,11 @@ export default {
                     children: 'children'
                 }
             }
+        },
+        
+        isDefaultExpand: {
+            type: Boolean,
+            default: false
         }
     },
 
@@ -77,10 +85,6 @@ export default {
         }
     },
 
-    watch: {
-       
-    },
-
     mounted() {
         this.flatData(this.treeData);
         this.init();
@@ -103,20 +107,35 @@ export default {
             for(let item of list) {
                 item.level = level;
                 item.pId = parentId;
-                this.$set(item, 'visible', true);
-                this.$set(item, 'isExpand', true);
+                if( level === 0 ) {
+                    item.visible = true;
+                    item.isExpand = false;
+                }
+                else {
+                    item.visible = this.isDefaultExpand;
+                    item.isExpand = this.isDefaultExpand;
+                }
+                
                 this.dataMap.set(item.id, item);
-
                 item?.children?.length && this.flatData(item.children, level + 1, item.id);  
             }
         },
 
         handleScroll() {
-            const scrollTop = this.$el.scrollTop;
-            this.$refs.listCtx.style.webkitTransform = `translate3d(0, ${scrollTop}px, 0)`;
-            this.startPosition = Math.floor(scrollTop / this.itemHeight);
-            this.endPosition = this.startPosition + this.showCount;
-            this.showData = this.visibleTrueData.slice(this.startPosition, this.endPosition);
+            // TODO 还需添加滚动条是否到底部了
+            requestAnimationFrame(() => {
+                const scrollTop = this.$el.scrollTop;
+                const listCtxDoc = this.$refs.listCtx;
+                listCtxDoc.style.webkitTransform = `translate3d(0, ${ scrollTop }px, 0)`;
+                
+                this.startPosition = Math.floor(scrollTop / this.itemHeight);
+                this.endPosition = this.startPosition + this.showCount;
+
+                // const scrollHeight = listCtxDoc.scrollHeight;
+                // if(this.endPosition >= this.visibleTrueData.length) return;
+
+                this.showData = this.visibleTrueData.slice(this.startPosition, this.endPosition);
+            })
         },
 
         handleExpandClick(item) {
@@ -155,6 +174,19 @@ export default {
 }
 </script>
 <style scoped>
+.list-enter, .list-leave-to {
+  opacity: 0;
+  transform: translateY( -100% );
+}
+.list-leave-active {
+    /* transform: translateY(0); */
+  position: absolute;
+}
+.list-item{
+    transition: position 1s;
+}
+
+
 .virtual-tree-wrapper{
     position: relative;
     height: 100%;
@@ -181,6 +213,9 @@ li{
     height: 24px;
     text-align: left;
     cursor: pointer;
+}
+li:last-child{
+    margin-bottom: 20px;
 }
 .station-style{
     display: inline-block;
@@ -230,6 +265,7 @@ li{
     width: 12px;
     height: 12px;
     margin-right: 2px;
+    transition: background-image .5s;
 }
 .icon-expand{
     background-image: url('./icons/expand.png');
